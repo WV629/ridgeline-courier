@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="icon" href="data:,">
+<title>Ridgeline Courier — a 3D bush-plane courier game</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { width: 100%; height: 100%; overflow: hidden; background: #0a1420; font-family: "Segoe UI", system-ui, sans-serif; color: #eef4fa; }
+  #game-canvas { position: fixed; inset: 0; width: 100%; height: 100%; display: block; }
+  .panel { background: rgba(8, 18, 30, 0.78); border: 1px solid rgba(160, 200, 240, 0.35); border-radius: 10px; backdrop-filter: blur(2px); }
+  /* ---------- HUD ---------- */
+  #hud { position: fixed; inset: 0; pointer-events: none; display: none; font-size: 14px; }
+  #hud-top-left { position: absolute; top: 12px; left: 12px; padding: 10px 14px; min-width: 300px; }
+  #mission-name { font-size: 19px; font-weight: 800; color: #ffd23e; letter-spacing: 0.5px; }
+  #timer-row { display: flex; gap: 18px; margin-top: 4px; font-size: 15px; }
+  #timer-row b { color: #fff; font-size: 17px; }
+  #objective { margin-top: 6px; color: #bfe3ff; font-size: 15px; }
+  #objectives { margin-top: 6px; font-size: 13px; line-height: 1.5; }
+  #objectives .obj.done { color: #37d67a; }
+  #objectives .obj.current { color: #ffb84a; font-weight: 700; }
+  #hud-top-right { position: absolute; top: 12px; right: 12px; text-align: right; }
+  #minimap { border: 1px solid rgba(160,200,240,0.4); border-radius: 8px; background: #0a1a2a; }
+  #wind { margin-top: 4px; font-size: 13px; color: #bfe3ff; }
+  #msg { position: absolute; top: 14px; left: 50%; transform: translateX(-50%); padding: 8px 18px; font-size: 17px; font-weight: 700; color: #fff; transition: opacity 0.4s; white-space: nowrap; }
+  #warn { position: absolute; top: 64px; left: 50%; transform: translateX(-50%); padding: 7px 16px; background: rgba(120, 10, 10, 0.85); border: 1px solid #ff5a4a; border-radius: 8px; color: #fff; font-weight: 800; font-size: 16px; display: none; white-space: nowrap; }
+  #hud-bottom-left { position: absolute; left: 12px; bottom: 12px; padding: 10px 12px; display: flex; gap: 14px; align-items: center; }
+  .gauge { text-align: center; min-width: 74px; }
+  .gauge .label { font-size: 11px; letter-spacing: 1px; color: #9fc3e0; text-transform: uppercase; }
+  .gauge .value { font-size: 30px; font-weight: 800; line-height: 1.05; color: #fff; }
+  .gauge .unit { font-size: 12px; color: #9fc3e0; }
+  #horizon { border: 1px solid rgba(160,200,240,0.4); border-radius: 6px; }
+  #hud-bottom-right { position: absolute; right: 12px; bottom: 12px; padding: 10px 14px; width: 250px; }
+  .bar-row { display: flex; align-items: center; gap: 8px; margin: 5px 0; font-size: 13px; }
+  .bar-row .blabel { width: 64px; color: #9fc3e0; text-transform: uppercase; font-size: 11px; letter-spacing: 1px; }
+  .bar { flex: 1; height: 12px; background: rgba(255,255,255,0.14); border-radius: 6px; overflow: hidden; }
+  .bar > div { height: 100%; background: #37d67a; }
+  .bar-row .bval { width: 44px; text-align: right; font-weight: 700; }
+  #gear-row { display: flex; gap: 16px; margin-top: 6px; font-size: 13px; color: #bfe3ff; }
+  #gear-row b { color: #fff; }
+  #hud-help { position: absolute; bottom: 12px; left: 50%; transform: translateX(-50%); font-size: 12px; color: rgba(220, 235, 250, 0.75); text-shadow: 0 1px 3px #000; }
+  /* ---------- Screens ---------- */
+  .screen { position: fixed; inset: 0; display: none; align-items: center; justify-content: center; background: linear-gradient(180deg, rgba(6,14,24,0.55), rgba(6,14,24,0.88)); z-index: 10; }
+  .screen-card { width: min(880px, 94vw); max-height: 92vh; overflow-y: auto; padding: 26px 30px; background: rgba(10, 22, 36, 0.92); border: 1px solid rgba(160,200,240,0.4); border-radius: 14px; }
+  h1 { font-size: 44px; letter-spacing: 1px; color: #ffd23e; text-shadow: 0 2px 0 #7a4a00; }
+  h1 small { display: block; font-size: 16px; color: #bfe3ff; letter-spacing: 3px; text-shadow: none; margin-top: 4px; }
+  h2 { font-size: 26px; color: #ffd23e; margin-bottom: 8px; }
+  .sub { color: #bfe3ff; margin: 6px 0 16px; font-size: 15px; line-height: 1.5; }
+  .cols { display: grid; grid-template-columns: 1.25fr 1fr; gap: 18px; }
+  .col-title { font-size: 13px; letter-spacing: 2px; text-transform: uppercase; color: #9fc3e0; margin: 10px 0 6px; }
+  #mission-list { display: flex; flex-direction: column; gap: 6px; }
+  .mission-btn { display: flex; gap: 10px; align-items: baseline; text-align: left; padding: 8px 12px; background: rgba(40, 90, 130, 0.35); border: 1px solid rgba(160,200,240,0.3); border-radius: 8px; color: #eef4fa; cursor: pointer; font-size: 14px; }
+  .mission-btn:hover { background: rgba(60, 120, 170, 0.5); border-color: #ffd23e; }
+  .mission-btn .m-no { color: #ffd23e; font-weight: 800; }
+  .mission-btn .m-name { font-weight: 700; }
+  .mission-btn .m-meta { margin-left: auto; color: #9fc3e0; font-size: 12px; white-space: nowrap; }
+  .big-btn { pointer-events: auto; padding: 12px 22px; font-size: 17px; font-weight: 800; border: none; border-radius: 10px; background: #ffd23e; color: #3a2a00; cursor: pointer; margin-right: 10px; }
+  .big-btn:hover { background: #ffe27a; }
+  .ghost-btn { pointer-events: auto; padding: 10px 18px; font-size: 15px; font-weight: 700; border: 1px solid rgba(160,200,240,0.5); border-radius: 10px; background: transparent; color: #eef4fa; cursor: pointer; }
+  .ghost-btn:hover { border-color: #ffd23e; color: #ffd23e; }
+  .ghost-btn:disabled { opacity: 0.45; cursor: default; }
+  .stat-line { display: flex; gap: 22px; margin: 10px 0; font-size: 15px; flex-wrap: wrap; }
+  .stat-line b { color: #ffd23e; }
+  .shop-row { display: flex; gap: 10px; align-items: center; padding: 7px 4px; border-bottom: 1px solid rgba(160,200,240,0.15); font-size: 14px; }
+  .shop-row .s-name { font-weight: 700; width: 150px; }
+  .shop-row .s-desc { flex: 1; color: #bfe3ff; font-size: 13px; }
+  .buy-btn { padding: 5px 12px; border-radius: 7px; border: 1px solid #ffd23e; background: transparent; color: #ffd23e; font-weight: 700; cursor: pointer; }
+  .buy-btn:disabled { border-color: rgba(160,200,240,0.3); color: #9fc3e0; cursor: default; }
+  .feat { font-size: 13px; padding: 3px 0; color: #9fc3e0; }
+  .feat.got { color: #ffd23e; }
+  #howto { font-size: 13px; line-height: 1.6; color: #bfe3ff; display: none; margin-top: 8px; }
+  #howto.open { display: block; }
+  #howto kbd { background: #22374a; border: 1px solid #4a6a8a; border-radius: 4px; padding: 0 5px; font-family: inherit; }
+  #brief-objectives { margin: 10px 0 16px 20px; font-size: 15px; line-height: 1.7; }
+  .debrief-grid { display: grid; grid-template-columns: auto auto; gap: 8px 26px; font-size: 17px; margin: 14px 0; }
+  .debrief-grid .k { color: #9fc3e0; }
+  .debrief-grid .v { font-weight: 800; color: #fff; }
+  .btn-row { margin-top: 18px; }
+  @media (max-width: 900px) { .cols { grid-template-columns: 1fr; } h1 { font-size: 32px; } }
+</style>
+</head>
+<body>
+<canvas id="game-canvas"></canvas>
+
+<!-- ============ HUD ============ -->
+<div id="hud">
+  <div id="hud-top-left" class="panel">
+    <div id="mission-name">Free Flight</div>
+    <div id="timer-row"><span>⏱ <b id="timer">00:00</b></span><span>★ Score <b id="score">0</b></span><span>💰 <b id="credits">0</b> cr</span></div>
+    <div id="objective">—</div>
+    <div id="objectives"></div>
+  </div>
+  <div id="hud-top-right">
+    <canvas id="minimap" width="190" height="190"></canvas>
+    <div id="wind" class="panel" style="padding:4px 8px; display:inline-block;">Wind —</div>
+  </div>
+  <div id="msg" class="panel"></div>
+  <div id="warn"></div>
+  <div id="hud-bottom-left" class="panel">
+    <div class="gauge"><div class="label">Airspeed</div><div class="value"><span id="speed">0</span><span class="unit"> kt</span></div></div>
+    <div class="gauge"><div class="label">Altitude</div><div class="value" style="font-size:22px;" id="alt">0 m</div></div>
+    <div class="gauge"><div class="label">Vert speed</div><div class="value" style="font-size:22px;" id="vs">+0.0 m/s</div></div>
+    <div class="gauge"><div class="label">Heading</div><div class="value" style="font-size:26px;" id="hdg">090°</div></div>
+    <canvas id="horizon" width="150" height="84"></canvas>
+  </div>
+  <div id="hud-bottom-right" class="panel">
+    <div class="bar-row"><span class="blabel">Throttle</span><div class="bar"><div id="thrbar" style="width:0%"></div></div><span class="bval" id="thr">0%</span></div>
+    <div class="bar-row"><span class="blabel">Fuel</span><div class="bar"><div id="fuelbar" style="width:100%"></div></div><span class="bval" id="fuel">100%</span></div>
+    <div class="bar-row"><span class="blabel">Damage</span><div class="bar"><div id="dmgbar" style="width:0%"></div></div><span class="bval" id="dmg">0%</span></div>
+    <div id="gear-row"><span>Gear <b id="gear">DOWN</b></span><span>Flaps <b id="flaps">UP</b></span><span>C = camera</span></div>
+  </div>
+  <div id="hud-help">↑↓ pitch · ←→ bank · Shift/Ctrl throttle · Q/E rudder · F flaps · G gear · SPACE action · P pause</div>
+</div>
+
+<!-- ============ TITLE ============ -->
+<div id="screen-title" class="screen">
+  <div class="screen-card">
+    <h1>RIDGELINE COURIER<small>3D BUSH-PLANE COURIER · 12 SORTIES · 1 ARCHIPELAGO</small></h1>
+    <p class="sub">Fly the mail, the medicine and the mountain rescue across a wild island chain.
+    Twelve missions, four airfields, storms, night runs and a Grand Tour — with fuel,
+    damage, upgrades and a hangar full of stories. Built from scratch in Three.js.</p>
+    <div class="stat-line">
+      <span>💰 Credits <b id="credits-title">0</b></span>
+      <span>★ Feats <b id="feats-count">0/8</b></span>
+      <span>∞ Endless best <b id="endless-best">0</b> rings</span>
+      <button class="ghost-btn" id="btn-mute">🔊 Sound</button>
+      <button class="ghost-btn" id="btn-how">How to fly</button>
+    </div>
+    <div id="howto">
+      <b>Fly:</b> <kbd>↑</kbd><kbd>↓</kbd> pitch, <kbd>←</kbd><kbd>→</kbd> bank and turn, <kbd>Q</kbd>/<kbd>E</kbd> rudder.
+      <b>Throttle:</b> <kbd>Shift</kbd> up, <kbd>Ctrl</kbd> down. <b>Flaps</b> <kbd>F</kbd> (takeoff/landing),
+      <b>gear</b> <kbd>G</kbd>, <b>camera</b> <kbd>C</kbd> (chase / cockpit / tower), <b>action</b> <kbd>SPACE</kbd>
+      (water drop), <kbd>P</kbd> pause, <kbd>R</kbd> restart sortie, <kbd>M</kbd> mute, drag mouse to look around.<br>
+      <b>Landings:</b> approach at 60–75 kt, gear down, flaps to LAND, flare gently — vertical speed under 4 m/s keeps the gear on.
+      Refuel by parking on any strip. Stalls bite below ~65 kt clean; overspeed past 185 kt breaks the airframe.
+    </div>
+    <div class="cols">
+      <div>
+        <div class="col-title">Missions</div>
+        <div id="mission-list"></div>
+        <div class="btn-row">
+          <button class="big-btn" id="btn-endless">∞ Endless Rings</button>
+          <button class="big-btn" id="btn-free" style="background:#7ec8e8;">✈ Free Flight</button>
+        </div>
+      </div>
+      <div>
+        <div class="col-title">Hangar upgrades</div>
+        <div id="shop-list"></div>
+        <div class="col-title">Pilot feats</div>
+        <div id="feats-list"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ============ BRIEFING ============ -->
+<div id="screen-briefing" class="screen">
+  <div class="screen-card" style="width:min(640px,94vw);">
+    <h2 id="brief-name">Mission</h2>
+    <p class="sub" id="brief-text"></p>
+    <p class="sub" id="brief-meta" style="color:#ffd23e;"></p>
+    <div class="col-title">Objectives</div>
+    <ul id="brief-objectives"></ul>
+    <div class="btn-row">
+      <button class="big-btn" id="btn-fly">✈ Fly this sortie</button>
+      <button class="ghost-btn" id="btn-back">Back</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============ DEBRIEF ============ -->
+<div id="screen-debrief" class="screen">
+  <div class="screen-card" style="width:min(560px,94vw);">
+    <h2 id="debrief-title">Mission complete</h2>
+    <div class="debrief-grid">
+      <span class="k">Score</span><span class="v" id="debrief-score">0</span>
+      <span class="k">Time</span><span class="v" id="debrief-time">—</span>
+      <span class="k">Fuel left</span><span class="v" id="debrief-fuel">—</span>
+      <span class="k">Payout</span><span class="v" id="debrief-credits">—</span>
+    </div>
+    <p class="sub" id="debrief-note"></p>
+    <div class="btn-row">
+      <button class="big-btn" id="btn-next">Next mission →</button>
+      <button class="big-btn" id="btn-replay" style="background:#7ec8e8;">↻ Fly again</button>
+      <button class="ghost-btn" id="btn-menu">Hangar</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============ PAUSED ============ -->
+<div id="screen-paused" class="screen">
+  <div class="screen-card" style="width:min(420px,94vw); text-align:center;">
+    <h2>Paused</h2>
+    <p class="sub">The ridge will wait. Probably.</p>
+    <div class="btn-row">
+      <button class="big-btn" id="btn-resume">Resume</button>
+      <button class="ghost-btn" id="btn-quit">Quit to hangar</button>
+    </div>
+  </div>
+</div>
+
+<script type="importmap">
+{ "imports": { "three": "./vendor/three.module.min.js" } }
+</script>
+<script type="module" src="./src/main.js"></script>
+</body>
+</html>
